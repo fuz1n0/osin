@@ -1,0 +1,17 @@
+{
+  "name": "winhp-live-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node osin.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.4.7",
+    "tiktok-live-connector": "^2.5.0"
+  }
+}
