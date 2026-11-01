@@ -141,15 +141,20 @@ async function postYoutubeVideoAlert(title, videoId) {
 
 	const safeTitle = title.replace(/@/g, '@\u200b');
 	const templates = [
-		'📺 WINHP vừa thả video mới, vào xem liền nha: **{title}**',
-		'🎬 Video mới lên sóng rồi! Cả nhà xem thử nè: **{title}**',
-		'✨ Hàng mới của WINHP đây bà con ơi: **{title}**',
-		'👀 Có video mới rồi, cùng WINHP xem nào: **{title}**',
-		'🚨 Tin nóng: WINHP vừa đăng video mới — **{title}**',
+		'📺 Alo alo! Sếp Thắng vừa thả hàng mới lên YouTube rồi đó bà con: **{title}** — vào xem liền kẻo miss!',
+		'🎬 Ting ting! Con Osin xin báo có video mới hot hổi vừa lên lò: **{title}** — click coi lẹ nha!',
+		'✨ Hàng xịn của WINHP vừa cập bến, bà con ơi lên đồ vào xem ngay: **{title}**',
+		'👀 Đang lướt mạng vu vơ hả? Dừng lại xem video mới của sếp Thắng đi: **{title}**',
+		'🚨 Tin nóng hổi: WINHP vừa thả bomb video mới — **{title}** — không vào xem thì tiếc lắm đó!',
+		'🔥 Video mới của sếp Thắng vừa lên sóng, anh em kéo vào hóng ngay và luôn: **{title}**',
+		'🎥 Bỏ hết việc xuống, WINHP vừa đăng video mới xịn xò này nè: **{title}** — xem cho biết!',
+		'🍿 Chuẩn bị bắp rang bơ đi, video mới của WINHP đã ra lò rồi: **{title}**',
+		'📢 Cả nhà ơi, YouTube WINHP vừa có hàng mới về, vào xem trước khi hết chỗ: **{title}**',
+		'🤩 Đỉnh cao nội dung WINHP lại tái xuất! Video mới đây nè: **{title}** — xem ngay kẻo trễ!',
 	];
 	const roleMention = config.youtubeVideoNotificationRoleId
 		? `<@&${config.youtubeVideoNotificationRoleId}> `
-		: '';
+		: '@everyone ';
 	await channel.send({
 		content: `${roleMention}${pickRandomTemplate(
 			'YouTube-video',
@@ -157,6 +162,7 @@ async function postYoutubeVideoAlert(title, videoId) {
 			lastVideoTemplateIndexes,
 		).replace('{title}', safeTitle)}\nhttps://www.youtube.com/watch?v=${videoId}`,
 		allowedMentions: {
+			parse: config.youtubeVideoNotificationRoleId ? [] : ['everyone'],
 			roles: config.youtubeVideoNotificationRoleId
 				? [config.youtubeVideoNotificationRoleId]
 				: [],
