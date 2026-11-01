@@ -18,7 +18,7 @@ YouTube được kiểm tra mặc định mỗi 30 phút. Tìm livestream tiêu 
 
 1. Đẩy project lên GitHub, chọn **New > Blueprint** trên Render và kết nối repository này. Render sẽ đọc cấu hình từ `render.yaml`.
 2. Điền các biến môi trường được yêu cầu khi tạo service. Không đưa token hoặc API key vào GitHub; có thể để trống các biến của nền tảng không dùng.
-3. Sau khi deploy, mở `https://<ten-service>.onrender.com/health`. Bot đã kết nối Discord thì endpoint trả về HTTP 200; lúc đang khởi động hoặc mất kết nối Discord thì trả về HTTP 503.
-4. Trên UptimeRobot, tạo monitor loại **HTTP(s)** với URL `https://<ten-service>.onrender.com/health`, kiểm tra mỗi 5 phút. Có thể bật cảnh báo để biết khi health check lỗi.
+3. Sau khi deploy, mở `https://<ten-service>.onrender.com/` để xem trang trạng thái của bot. Trang tự cập nhật mỗi 30 giây và báo bot đã kết nối Discord hay chưa.
+4. Trên UptimeRobot, tạo monitor loại **HTTP(s)** với URL `https://<ten-service>.onrender.com/health`, kiểm tra mỗi 5 phút. Endpoint trả về HTTP 200 khi Discord đã kết nối và HTTP 503 khi bot chưa sẵn sàng; có thể bật cảnh báo để biết khi health check lỗi.
 
 Blueprint hiện dùng gói Free. UptimeRobot giúp kiểm tra endpoint và có thể đánh thức service đang ngủ, nhưng gói Free có thể sleep, cold start hoặc restart nên không đảm bảo bot chạy liên tục tuyệt đối. Nếu cần chạy 24/7 ổn định, chọn gói Render Always On trả phí.
