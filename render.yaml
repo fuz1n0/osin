@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: winhp-live-notifier
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: YOUTUBE_CHANNEL
+        sync: false
+      - key: YOUTUBE_NOTIFICATION_CHANNEL_ID
+        sync: false
+      - key: YOUTUBE_VIDEO_NOTIFICATION_CHANNEL_ID
+        sync: false
+      - key: YOUTUBE_VIDEO_NOTIFICATION_ROLE_ID
+        sync: false
+      - key: TIKTOK_ACCOUNT
+        sync: false
+      - key: TIKTOK_NOTIFICATION_CHANNEL_ID
+        sync: false
+      - key: YOUTUBE_POLL_INTERVAL_MS
+        value: "1800000"
+      - key: TIKTOK_POLL_INTERVAL_MS
+        value: "60000"
