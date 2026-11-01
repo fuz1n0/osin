@@ -1,4 +1,5 @@
 import { createHealthServer } from './health-server.js';
+import { generateAiReply, isOsinCall } from './bot-replies.js';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
 import { TikTokLiveConnection } from 'tiktok-live-connector';
@@ -23,8 +24,27 @@ if (!config.discordToken) {
 	process.exit(1);
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+	intents: [
+		GatewayIntentBits.Guilds,
+		GatewayIntentBits.GuildMessages,
+		GatewayIntentBits.MessageContent,
+	],
+});
 const healthServer = createHealthServer(() => client.isReady());
+
+client.on(Events.MessageCreate, async (message) => {
+	if (message.author.bot || !isOsinCall(message.content)) return;
+
+	try {
+		await message.reply({
+			content: await generateAiReply(message.content),
+			allowedMentions: { repliedUser: false },
+		});
+	} catch (error) {
+		console.error('[Chat] Không thể trả lời tin nhắn gọi Ô sin:', error);
+	}
+});
 
 healthServer.on('error', (error) => {
 	console.error('Không thể khởi động health server:', error);
