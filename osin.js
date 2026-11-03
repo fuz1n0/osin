@@ -36,7 +36,7 @@ const client = new Client({
 // KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
 // ==========================================
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" }); // Sửa lại thành 1.5-flash
+const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" }); // Sửa lại thành 1.5-flash
 
 let isOsinEnabled = true;
 
