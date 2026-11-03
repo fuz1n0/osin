@@ -36,7 +36,7 @@ const client = new Client({
 // KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
 // ==========================================
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Sửa lại thành 1.5-flash
+const model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" }); // Sửa lại thành 1.5-flash
 
 let isOsinEnabled = true;
 
@@ -81,22 +81,39 @@ client.on(Events.MessageCreate, async (message) => {
         }
     }
 
-    // 2. Chửi lộn khi bị réo tên
+    // 2. Chửi lộn khi bị réo tên HOẶC bị Reply
     if (!isOsinEnabled) return;
 
-    if (noiDung.includes('osin')) {
-        const cauHoi = message.content.replace(/osin/gi, '').trim();
+    // Xác định xem bot có đang bị réo không (có chữ "osin" hoặc bị Tag thẳng mặt)
+    let biReo = noiDung.includes('osin') || message.mentions.has(client.user.id);
+
+    // Cực kỳ quan trọng: Nếu khách không gọi "osin", không tag, NHƯNG bấm nút Reply tin nhắn của bot
+    if (!biReo && message.reference) {
+        const tinNhanGoc = await message.fetchReference().catch(() => null);
+        // Nếu tin nhắn gốc đúng là của con Osin thì tính là đang bị réo
+        if (tinNhanGoc && tinNhanGoc.author.id === client.user.id) {
+            biReo = true; 
+        }
+    }
+
+    if (biReo) {
+        // Lọc bỏ chữ "osin" và cái tag ID của bot ra để AI đọc câu hỏi không bị lú
+        const cauHoi = message.content
+            .replace(/osin/gi, '')
+            .replace(`<@${client.user.id}>`, '')
+            .replace(`<@!${client.user.id}>`, '')
+            .trim();
 
         if (!cauHoi) {
-            return message.reply('Gọi cái giề? Có rắm thì đánh lẹ đi tao còn đi gánh sếp Thắng!');
+            return message.reply('Mày réo tên tao rồi để đấy à? Rảnh háng hả?');
         }
 
         await message.channel.sendTyping();
         const cauTraLoi = await osinTraTreo(cauHoi);
         return message.reply({
-			content: cauTraLoi,
-			allowedMentions: { repliedUser: false }
-		});
+            content: cauTraLoi,
+            allowedMentions: { repliedUser: false } // Tắt ping để khỏi réo ồn ào sếp Thắng
+        });
     }
 });
 
