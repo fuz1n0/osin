@@ -287,6 +287,72 @@ async function checkYouTubeLive() {
 	announcedYoutubeLiveId = videoId;
 	announcedYoutubeLiveIds.add(videoId);
 }
+// ==========================================
+// PHẦN 1: KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
+// ==========================================
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+// Nhớ chắc chắn có process.env.GOOGLE_API_KEY trong file .env nhé!
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+let isOsinEnabled = true; // Công tắc mặc định bật
+
+async function osinTraTreo(tinNhanCuaKhach) {
+    try {
+        const thanChú = `
+        Mày là 'Osin', một con bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp (Thắng đi rừng). 
+        Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, nhưng luôn bênh vực sếp Winhp.
+        Trang bị vốn từ GenZ, toxic nhẹ nhưng mang tính tấu hài là chính.
+        Bây giờ khách trong server chat câu này, mày rep lại nó thật thâm thúy ngắn gọn cho tao: 
+        "${tinNhanCuaKhach}"
+        `;
+        const result = await model.generateContent(thanChú);
+        const response = await result.response;
+        return response.text();
+    } catch (error) {
+        console.error("Lỗi Google API:", error);
+        return "Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp!";
+    }
+}
+
+// ==========================================
+// PHẦN 2: LẮP RÁP VÀO SỰ KIỆN TIN NHẮN
+// ==========================================
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+
+    const noiDung = message.content.toLowerCase().trim();
+
+    // 1. Công tắc rọ mõm (Chỉ Admin mới xài được)
+    if (noiDung === 'osin off' || noiDung === 'osin on') {
+        if (!message.member.permissions.has('Administrator')) {
+            return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
+        }
+
+        if (noiDung === 'osin off') {
+            isOsinEnabled = false;
+            return message.reply('Đã ngậm mồm! Osin đi ngủ đây, cấm đứa nào làm phiền!');
+        } else {
+            isOsinEnabled = true;
+            return message.reply('Osin đã thức giấc! Đứa nào láo nháo tao tế sống!');
+        }
+    }
+
+    // 2. Chửi lộn khi bị réo tên (Chỉ chạy khi công tắc đang ON)
+    if (!isOsinEnabled) return;
+
+    if (noiDung.includes('osin')) {
+        const cauHoi = message.content.replace(/osin/gi, '').trim();
+
+        if (!cauHoi) {
+            return message.reply('Gọi cái giề? Có rắm thì đánh lẹ đi tao còn đi gánh sếp Thắng!');
+        }
+
+        await message.channel.sendTyping();
+        const cauTraLoi = await osinTraTreo(cauHoi);
+        return message.reply(cauTraLoi);
+    }
+});
 
 async function checkYouTubeVideos() {
 	if (!config.youtubeVideoNotificationChannelId) return;
