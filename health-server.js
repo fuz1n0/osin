@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 
 export function createHealthServer(isDiscordReady) {
 	return createServer((request, response) => {
-		if (request.method !== 'GET') {
+		if (request.method !== 'GET' && request.method !== 'HEAD') {
 			response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
 			response.end('Not found');
 			return;
