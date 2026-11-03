@@ -1,8 +1,8 @@
 import { createHealthServer } from './health-server.js';
-import { generateAiReply, isOsinCall } from './bot-replies.js';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
 import { TikTokLiveConnection } from 'tiktok-live-connector';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // Đã chuyển sang dùng import chuẩn chỉ
 
 loadEnv();
 
@@ -31,20 +31,79 @@ const client = new Client({
 		GatewayIntentBits.MessageContent,
 	],
 });
-const healthServer = createHealthServer(() => client.isReady());
 
+// ==========================================
+// KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
+// ==========================================
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Sửa lại thành 1.5-flash
+
+let isOsinEnabled = true;
+
+async function osinTraTreo(tinNhanCuaKhach) {
+    try {
+        const thanChú = `
+        Mày là 'Osin', một con bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp (Thắng đi rừng). 
+        Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, nhưng luôn bênh vực sếp Winhp.
+        Trang bị vốn từ GenZ, toxic nhẹ nhưng mang tính tấu hài là chính.
+        Bây giờ khách trong server chat câu này, mày rep lại nó thật thâm thúy ngắn gọn cho tao: 
+        "${tinNhanCuaKhach}"
+        `;
+        const result = await model.generateContent(thanChú);
+        const response = await result.response;
+        return response.text();
+    } catch (error) {
+        console.error("Lỗi Google API:", error);
+        return "Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp!";
+    }
+}
+
+// ==========================================
+// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN
+// ==========================================
 client.on(Events.MessageCreate, async (message) => {
-	if (message.author.bot || !isOsinCall(message.content)) return;
+    if (message.author.bot) return;
 
-	try {
-		await message.reply({
-			content: await generateAiReply(message.content),
-			allowedMentions: { repliedUser: false },
+    const noiDung = message.content.toLowerCase().trim();
+
+    // 1. Công tắc rọ mõm (Chỉ Admin)
+    if (noiDung === 'osin off' || noiDung === 'osin on') {
+        if (!message.member.permissions.has('Administrator')) {
+            return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
+        }
+
+        if (noiDung === 'osin off') {
+            isOsinEnabled = false;
+            return message.reply('Đã ngậm mồm! Osin đi ngủ đây, cấm đứa nào làm phiền!');
+        } else {
+            isOsinEnabled = true;
+            return message.reply('Osin đã thức giấc! Đứa nào láo nháo tao tế sống!');
+        }
+    }
+
+    // 2. Chửi lộn khi bị réo tên
+    if (!isOsinEnabled) return;
+
+    if (noiDung.includes('osin')) {
+        const cauHoi = message.content.replace(/osin/gi, '').trim();
+
+        if (!cauHoi) {
+            return message.reply('Gọi cái giề? Có rắm thì đánh lẹ đi tao còn đi gánh sếp Thắng!');
+        }
+
+        await message.channel.sendTyping();
+        const cauTraLoi = await osinTraTreo(cauHoi);
+        return message.reply({
+			content: cauTraLoi,
+			allowedMentions: { repliedUser: false }
 		});
-	} catch (error) {
-		console.error('[Chat] Không thể trả lời tin nhắn gọi Ô sin:', error);
-	}
+    }
 });
+
+// ==========================================
+// SERVER GIỮ MẠNG (HEALTH SERVER)
+// ==========================================
+const healthServer = createHealthServer(() => client.isReady());
 
 healthServer.on('error', (error) => {
 	console.error('Không thể khởi động health server:', error);
@@ -55,6 +114,9 @@ healthServer.listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
 	console.log(`Health server đang lắng nghe trên port ${healthServer.address().port}.`);
 });
 
+// ==========================================
+// THÔNG BÁO LIVE VÀ VIDEO YT / TIKTOK
+// ==========================================
 client.once(Events.ClientReady, (readyClient) => {
 	console.log(`Bot đã online: ${readyClient.user.tag}`);
 	startConfiguredWatchers();
@@ -78,7 +140,6 @@ function startPolling(name, intervalMs, check) {
 			setTimeout(run, intervalMs);
 		}
 	};
-
 	void run();
 }
 
@@ -90,61 +151,26 @@ function startConfiguredWatchers() {
 	) {
 		if (!config.youtubeVideoNotificationChannelId) {
 			console.log('Thông báo video YouTube đang tắt: hãy cấu hình YOUTUBE_VIDEO_NOTIFICATION_CHANNEL_ID.');
-		} else if (
-			config.youtubeNotificationChannelId === config.youtubeVideoNotificationChannelId
-		) {
-			console.warn('Kênh thông báo video và live YouTube đang dùng cùng ID.');
 		}
 		startPolling('YouTube', config.youtubePollIntervalMs, checkYouTube);
-	} else {
-		console.log('YouTube watcher chưa bật: cần API key, link/kênh và ít nhất một ID kênh thông báo.');
 	}
 
 	if (config.tiktokAccount && config.tiktokNotificationChannelId) {
 		startPolling('TikTok', config.tiktokPollIntervalMs, checkTikTokLive);
-	} else {
-		console.log('TikTok watcher chưa bật: cần tài khoản và ID kênh thông báo.');
 	}
 }
 
 async function postLiveAlert(platform, channelId, url) {
 	const channel = await client.channels.fetch(channelId);
-	if (!channel?.isTextBased() || !channel.send) {
-		throw new Error(`ID kênh Discord không hợp lệ hoặc bot không gửi được: ${channelId}`);
-	}
+	if (!channel?.isTextBased() || !channel.send) return;
 
 	const templates = platform === 'YouTube'
-		? [
-			'🔴 OI OI, rạp xiếc trung ương WINHP chính thức mở cửa trên YouTube! Vào mua vé lẹ: {url}',
-        '📣 Alo 500 anh em, sếp Thắng đang on the sờ trimmm! Vào cúng view lẹ cho tui nhờ: {url}',
-        '🚨 Biến căng! WINHP đang múa phím trên YouTube, vào hóng lẹ kẻo ổng xóa live: {url}',
-        '🎥 Tới giờ trốn việc rồi! Sang YouTube xem WINHP tấu hài xả stress thôi: {url}',
-        '✨ Giờ này mà còn chưa vào xem sếp Thắng live thì tháng này nhịn cơm: {url}',
-        '👀 Giáo án đi rừng mỏ hỗn bắt đầu trên YouTube! Lấy giấy bút ra chép lẹ: {url}',
-        '🔥 Đỉnh cao tấu hài WINHP đã comeback, link nóng hổi vừa thổi vừa xem đây: {url}',
-        '🛎️ Ting ting! Con Osin xin thông báo sếp Thắng đang live, anh em click lẹ đi cho tui chạy đủ KPI: {url}',
-        '📢 Hế lô ae, WINHP đang phát trực tiếp nè, tạt qua chào sếp một tiếng cho sếp vui: {url}',
-        '🤡 Ai đang rảnh rỗi sinh nông nổi thì bơi hết vào live YouTube của WINHP ngay và luôn: {url}'
-    ]
-    : [
-        '🎵 OI OI, sếp Thắng đang ngoáy trên tóp tóp kìa ae, vào thả tim sập live đi: {url}',
-        '📣 Lướt TikTok rác làm gì, vào xem rạp xiếc WINHP live cho đỡ chán đời nè: {url}',
-        '🚨 Alo alo, WINHP đang combat bằng mõm bên TikTok, anh em vào tiếp viện ngay: {url}',
-        '✨ Idol Tóp Tóp WINHP lên sóng rồi, vào cúng hoa hồng lẹ không ổng dỗi: {url}',
-        '👀 Đang buồn chán? Vào ngay TikTok WINHP hít hà drama tấu hài nè: {url}',
-        '🔥 TikTok đang nóng lên vì sếp Thắng vừa lên sóng, chần chừ gì nữa: {url}',
-        '🛎️ Bỏ điện thoại xuống... à nhầm, cầm điện thoại lên vào xem WINHP live TikTok lẹ: {url}',
-        '📢 Lớp học mỏ hỗn của WINHP trên TikTok chính thức bắt đầu, vắng mặt ghi sổ đầu bài: {url}',
-        '🤡 Sếp Thắng đang on live TikTok. Anh em không vào là sếp trừ lương con Osin này đấy: {url}',
-        '🚀 Đừng lướt vội, dừng chân lại trạm dừng nghỉ WINHP tấu hài tóp tóp ngay đây: {url}'
-    ];
+		? ['🔴 OI OI, rạp xiếc trung ương WINHP chính thức mở cửa trên YouTube! Vào mua vé lẹ: {url}']
+		: ['🎵 OI OI, sếp Thắng đang ngoáy trên tóp tóp kìa ae, vào thả tim sập live đi: {url}'];
 	
 	const message = `@everyone\n${pickRandomTemplate(platform, templates).replace('{url}', url)}`;
 
-	await channel.send({
-		content: message,
-		allowedMentions: { parse: ['everyone'] },
-	});
+	await channel.send({ content: message, allowedMentions: { parse: ['everyone'] } });
 	console.log(`[${platform}] Đã gửi thông báo live.`);
 }
 
@@ -153,10 +179,6 @@ const lastVideoTemplateIndexes = new Map();
 
 function pickRandomTemplate(key, templates, previousIndexes = lastLiveTemplateIndexes) {
 	let index = Math.floor(Math.random() * templates.length);
-	const previousIndex = previousIndexes.get(key);
-	if (templates.length > 1 && index === previousIndex) {
-		index = (index + 1 + Math.floor(Math.random() * (templates.length - 1))) % templates.length;
-	}
 	previousIndexes.set(key, index);
 	return templates[index];
 }
@@ -164,66 +186,32 @@ function pickRandomTemplate(key, templates, previousIndexes = lastLiveTemplateIn
 async function postYoutubeVideoAlert(title, videoId) {
 	const channelId = config.youtubeVideoNotificationChannelId;
 	const channel = await client.channels.fetch(channelId);
-	if (!channel?.isTextBased() || !channel.send) {
-		throw new Error(
-			`ID kênh Discord không hợp lệ hoặc bot không gửi được: ${channelId}`,
-		);
-	}
+	if (!channel?.isTextBased() || !channel.send) return;
 
 	const safeTitle = title.replace(/@/g, '@\u200b');
-	const templates = [
-		'📺 Alo alo! Sếp Thắng vừa thả hàng mới lên YouTube rồi đó bà con: **{title}** — vào xem liền kẻo miss!',
-		'🎬 Ting ting! Con Osin xin báo có video mới hot hổi vừa lên lò: **{title}** — click coi lẹ nha!',
-		'✨ Hàng xịn của WINHP vừa cập bến, bà con ơi lên đồ vào xem ngay: **{title}**',
-		'👀 Đang lướt mạng vu vơ hả? Dừng lại xem video mới của sếp Thắng đi: **{title}**',
-		'🚨 Tin nóng hổi: WINHP vừa thả bomb video mới — **{title}** — không vào xem thì tiếc lắm đó!',
-		'🔥 Video mới của sếp Thắng vừa lên sóng, anh em kéo vào hóng ngay và luôn: **{title}**',
-		'🎥 Bỏ hết việc xuống, WINHP vừa đăng video mới xịn xò này nè: **{title}** — xem cho biết!',
-		'🍿 Chuẩn bị bắp rang bơ đi, video mới của WINHP đã ra lò rồi: **{title}**',
-		'📢 Cả nhà ơi, YouTube WINHP vừa có hàng mới về, vào xem trước khi hết chỗ: **{title}**',
-		'🤩 Đỉnh cao nội dung WINHP lại tái xuất! Video mới đây nè: **{title}** — xem ngay kẻo trễ!',
-	];
-	const roleMention = config.youtubeVideoNotificationRoleId
-		? `<@&${config.youtubeVideoNotificationRoleId}> `
-		: '@everyone ';
+	const roleMention = config.youtubeVideoNotificationRoleId ? `<@&${config.youtubeVideoNotificationRoleId}> ` : '@everyone ';
+	
 	await channel.send({
-		content: `${roleMention}${pickRandomTemplate(
-			'YouTube-video',
-			templates,
-			lastVideoTemplateIndexes,
-		).replace('{title}', safeTitle)}\nhttps://www.youtube.com/watch?v=${videoId}`,
-		allowedMentions: {
-			parse: config.youtubeVideoNotificationRoleId ? [] : ['everyone'],
-			roles: config.youtubeVideoNotificationRoleId
-				? [config.youtubeVideoNotificationRoleId]
-				: [],
-		},
+		content: `${roleMention}📺 Alo alo! Sếp Thắng vừa thả hàng mới lên YouTube rồi đó bà con: **${safeTitle}**\nhttps://www.youtube.com/watch?v=${videoId}`,
+		allowedMentions: { parse: config.youtubeVideoNotificationRoleId ? [] : ['everyone'], roles: config.youtubeVideoNotificationRoleId ? [config.youtubeVideoNotificationRoleId] : [] },
 	});
-	console.log('[YouTube] Đã gửi thông báo video mới.');
 }
 
 function youtubeChannelReference(value) {
 	const channelIdMatch = value.match(/(?:youtube\.com\/channel\/)?(UC[\w-]{22})/i);
 	if (channelIdMatch) return { channelId: channelIdMatch[1] };
-
 	const handleMatch = value.match(/@([\w.-]+)/);
 	if (handleMatch) return { handle: handleMatch[1] };
-
-	const handle = value.trim().replace(/^@/, '');
-	return handle ? { handle } : null;
+	return value.trim().replace(/^@/, '') ? { handle: value.trim().replace(/^@/, '') } : null;
 }
 
 async function youtubeApiRequest(params) {
 	const url = new URL('https://www.googleapis.com/youtube/v3/' + params.endpoint);
-	for (const [key, value] of Object.entries(params.query)) {
-		url.searchParams.set(key, value);
-	}
+	for (const [key, value] of Object.entries(params.query)) url.searchParams.set(key, value);
 	url.searchParams.set('key', config.youtubeApiKey);
 
 	const response = await fetch(url);
-	if (!response.ok) {
-		throw new Error(`YouTube API trả về HTTP ${response.status}. Kiểm tra API key/quota.`);
-	}
+	if (!response.ok) throw new Error(`YouTube API trả về HTTP ${response.status}.`);
 	return response.json();
 }
 
@@ -237,133 +225,35 @@ const announcedYoutubeLiveIds = new Set();
 async function ensureYoutubeChannel() {
 	if (!cachedYoutubeChannelId) {
 		const reference = youtubeChannelReference(config.youtubeChannel);
-		if (!reference) throw new Error('YOUTUBE_CHANNEL đang trống hoặc không hợp lệ.');
-
 		const query = { part: 'id,contentDetails' };
 		if (reference.channelId) query.id = reference.channelId;
 		else query.forHandle = reference.handle;
 
 		const data = await youtubeApiRequest({ endpoint: 'channels', query });
-		const channel = data.items?.[0];
-		const channelId = channel?.id;
-		const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
-		if (!channelId) {
-			throw new Error('Không tìm thấy kênh YouTube. Dùng link /channel/UC... hoặc @handle.');
-		}
-		if (!uploadsPlaylistId) {
-			throw new Error('Không tìm thấy uploads playlist của kênh YouTube.');
-		}
-		cachedYoutubeChannelId = channelId;
-		youtubeUploadsPlaylistId = uploadsPlaylistId;
+		cachedYoutubeChannelId = data.items?.[0]?.id;
+		youtubeUploadsPlaylistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
 	}
 }
 
 async function checkYouTubeLive() {
 	if (!config.youtubeNotificationChannelId) return;
-
 	const data = await youtubeApiRequest({
 		endpoint: 'search',
-		query: {
-			part: 'id',
-			channelId: cachedYoutubeChannelId,
-			eventType: 'live',
-			type: 'video',
-			maxResults: '1',
-		},
+		query: { part: 'id', channelId: cachedYoutubeChannelId, eventType: 'live', type: 'video', maxResults: '1' },
 	});
 	const videoId = data.items?.[0]?.id?.videoId;
 
-	if (!videoId) {
-		announcedYoutubeLiveId = undefined;
-		return;
-	}
-	if (videoId === announcedYoutubeLiveId) return;
-
-	await postLiveAlert(
-		'YouTube',
-		config.youtubeNotificationChannelId,
-		`https://www.youtube.com/watch?v=${videoId}`,
-	);
+	if (!videoId || videoId === announcedYoutubeLiveId) return;
+	await postLiveAlert('YouTube', config.youtubeNotificationChannelId, `https://www.youtube.com/watch?v=${videoId}`);
 	announcedYoutubeLiveId = videoId;
 	announcedYoutubeLiveIds.add(videoId);
 }
-// ==========================================
-// PHẦN 1: KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
-// ==========================================
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-// Nhớ chắc chắn có process.env.GOOGLE_API_KEY trong file .env nhé!
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
-
-let isOsinEnabled = true; // Công tắc mặc định bật
-
-async function osinTraTreo(tinNhanCuaKhach) {
-    try {
-        const thanChú = `
-        Mày là 'Osin', một con bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp (Thắng đi rừng). 
-        Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, nhưng luôn bênh vực sếp Winhp.
-        Trang bị vốn từ GenZ, toxic nhẹ nhưng mang tính tấu hài là chính.
-        Bây giờ khách trong server chat câu này, mày rep lại nó thật thâm thúy ngắn gọn cho tao: 
-        "${tinNhanCuaKhach}"
-        `;
-        const result = await model.generateContent(thanChú);
-        const response = await result.response;
-        return response.text();
-    } catch (error) {
-        console.error("Lỗi Google API:", error);
-        return "Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp!";
-    }
-}
-
-// ==========================================
-// PHẦN 2: LẮP RÁP VÀO SỰ KIỆN TIN NHẮN
-// ==========================================
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    const noiDung = message.content.toLowerCase().trim();
-
-    // 1. Công tắc rọ mõm (Chỉ Admin mới xài được)
-    if (noiDung === 'osin off' || noiDung === 'osin on') {
-        if (!message.member.permissions.has('Administrator')) {
-            return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
-        }
-
-        if (noiDung === 'osin off') {
-            isOsinEnabled = false;
-            return message.reply('Đã ngậm mồm! Osin đi ngủ đây, cấm đứa nào làm phiền!');
-        } else {
-            isOsinEnabled = true;
-            return message.reply('Osin đã thức giấc! Đứa nào láo nháo tao tế sống!');
-        }
-    }
-
-    // 2. Chửi lộn khi bị réo tên (Chỉ chạy khi công tắc đang ON)
-    if (!isOsinEnabled) return;
-
-    if (noiDung.includes('osin')) {
-        const cauHoi = message.content.replace(/osin/gi, '').trim();
-
-        if (!cauHoi) {
-            return message.reply('Gọi cái giề? Có rắm thì đánh lẹ đi tao còn đi gánh sếp Thắng!');
-        }
-
-        await message.channel.sendTyping();
-        const cauTraLoi = await osinTraTreo(cauHoi);
-        return message.reply(cauTraLoi);
-    }
-});
 
 async function checkYouTubeVideos() {
 	if (!config.youtubeVideoNotificationChannelId) return;
-
 	const data = await youtubeApiRequest({
 		endpoint: 'playlistItems',
-		query: {
-			part: 'snippet',
-			playlistId: youtubeUploadsPlaylistId,
-			maxResults: '1',
-		},
+		query: { part: 'snippet', playlistId: youtubeUploadsPlaylistId, maxResults: '1' },
 	});
 	const latestVideo = data.items?.[0]?.snippet;
 	const videoId = latestVideo?.resourceId?.videoId;
@@ -373,37 +263,14 @@ async function checkYouTubeVideos() {
 		initializedYoutubeVideos = true;
 		return;
 	}
-	if (!videoId || videoId === announcedYoutubeUploadId) return;
+	if (!videoId || videoId === announcedYoutubeUploadId || announcedYoutubeLiveIds.has(videoId)) return;
 
-	if (announcedYoutubeLiveIds.has(videoId) || videoId === announcedYoutubeLiveId) {
-		announcedYoutubeUploadId = videoId;
-		return;
-	}
-
-	const details = await youtubeApiRequest({
-		endpoint: 'videos',
-		query: {
-			part: 'snippet,liveStreamingDetails',
-			id: videoId,
-		},
-	});
+	const details = await youtubeApiRequest({ endpoint: 'videos', query: { part: 'snippet,liveStreamingDetails', id: videoId } });
 	const video = details.items?.[0];
-	if (!video) {
-		throw new Error(`Không lấy được thông tin video YouTube: ${videoId}`);
-	}
 
-	if (
-		video.snippet?.liveBroadcastContent !== 'none' ||
-		video.liveStreamingDetails
-	) {
-		announcedYoutubeUploadId = videoId;
-		return;
-	}
+	if (video?.snippet?.liveBroadcastContent !== 'none' || video?.liveStreamingDetails) return;
 
-	await postYoutubeVideoAlert(
-		video.snippet?.title ?? latestVideo.title ?? 'Video mới',
-		videoId,
-	);
+	await postYoutubeVideoAlert(video.snippet?.title ?? 'Video mới', videoId);
 	announcedYoutubeUploadId = videoId;
 }
 
@@ -414,26 +281,17 @@ async function checkYouTube() {
 }
 
 function tiktokUsername(value) {
-	const handleMatch = value.match(/@([\w.-]+)/);
-	return (handleMatch?.[1] ?? value.trim().replace(/^@/, '')).replace(/\/$/, '');
+	return (value.match(/@([\w.-]+)/)?.[1] ?? value.trim().replace(/^@/, '')).replace(/\/$/, '');
 }
 
-const tiktokConnection = config.tiktokAccount
-	? new TikTokLiveConnection(tiktokUsername(config.tiktokAccount), {})
-	: null;
+const tiktokConnection = config.tiktokAccount ? new TikTokLiveConnection(tiktokUsername(config.tiktokAccount), {}) : null;
 let wasTikTokLive = false;
 
 async function checkTikTokLive() {
 	if (!tiktokConnection) return;
-
 	const isLive = await tiktokConnection.fetchIsLive();
 	if (isLive && !wasTikTokLive) {
-		const username = tiktokUsername(config.tiktokAccount);
-		await postLiveAlert(
-			'TikTok',
-			config.tiktokNotificationChannelId,
-			`https://www.tiktok.com/@${username}/live`,
-		);
+		await postLiveAlert('TikTok', config.tiktokNotificationChannelId, `https://www.tiktok.com/@${tiktokUsername(config.tiktokAccount)}/live`);
 	}
 	wasTikTokLive = isLive;
 }
