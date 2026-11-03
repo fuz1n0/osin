@@ -293,7 +293,7 @@ async function checkYouTubeLive() {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 // Nhớ chắc chắn có process.env.GOOGLE_API_KEY trong file .env nhé!
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
 
 let isOsinEnabled = true; // Công tắc mặc định bật
 
