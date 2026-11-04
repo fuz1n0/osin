@@ -66,38 +66,50 @@ let isOsinEnabled = true;
 // Bộ nhớ RAM để chống Spam API
 const cooldowns = new Map(); 
 
+// Thêm bùa "Ngủ đông" để bot biết cách chờ đợi
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
-    try {
-        const ID_SEP_THANG = '1254142011863339039'; 
-        const isBoss = (idKhach === ID_SEP_THANG);
+    const ID_SEP_THANG = '1254142011863339039'; 
+    const isBoss = (idKhach === ID_SEP_THANG);
 
-        // NẠP LUÔN YÊU CẦU "CHỬI YÊU" VÀO NÃO NÓ Ở ĐÂY MỚI CHUẨN:
-        const thaiDo = isBoss 
-            ? "LƯU Ý TỐI QUAN TRỌNG: NGƯỜI ĐANG CHAT VỚI MÀY CHÍNH LÀ SẾP WINHP BẰNG XƯƠNG BẰNG THỊT! Mày phải ngoan ngoãn, dạ vâng, dạ sếp, nịnh nọt, bợ đỡ sếp lên tận mây xanh. Cấm tuyệt đối được hỗn láo!" 
-            : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương. ĐẶC BIỆT LƯU Ý: Nếu khách gọi mày bằng những từ thân mật (như eiu, em yêu, baby, bae, ck iu, vk iu...), mày hãy đùa cợt lại theo ngôn ngữ GenZ lả lơi, gọi bae/bby, sau đó chửi yêu tụi nó một câu thật bẩn bựa cho tao. Còn lại thì cứ chửi thẳng mặt, bênh vực sếp Winhp tới cùng.";
+    const thaiDo = isBoss 
+        ? "LƯU Ý TỐI QUAN TRỌNG: NGƯỜI ĐANG CHAT VỚI MÀY CHÍNH LÀ SẾP WINHP BẰNG XƯƠNG BẰNG THỊT! Mày phải ngoan ngoãn, dạ vâng, dạ sếp, nịnh nọt, bợ đỡ sếp lên tận mây xanh. Cấm tuyệt đối được hỗn láo!" 
+        : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương. ĐẶC BIỆT LƯU Ý: Nếu khách gọi mày bằng những từ thân mật (như eiu, em yêu, baby, bae, ck iu, vk iu...), mày hãy đùa cợt lại theo ngôn ngữ GenZ lả lơi, gọi bae/bby, sau đó chửi yêu tụi nó một câu thật bẩn bựa cho tao. Còn lại thì cứ chửi thẳng mặt, bênh vực sếp Winhp tới cùng.";
 
-        const thanChú = `
-        Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
-        Người đang chat với mày tên là: ${tenKhach}.
-        ${thaiDo}
-        Bây giờ họ chat câu này, mày rep lại ngắn gọn cho tao: 
-        "${tinNhanCuaKhach}"
-        `;
+    const thanChú = `
+    Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
+    Người đang chat với mày tên là: ${tenKhach}.
+    ${thaiDo}
+    Bây giờ họ chat câu này, mày rep lại ngắn gọn cho tao: 
+    "${tinNhanCuaKhach}"
+    `;
 
-        const result = await model.generateContent(thanChú);
-        const response = await result.response;
-        return response.text();
-    } catch (error) {
-        console.error("Lỗi Google API:", error);
-        
-        // Bắt lỗi xịn xò để biết đường mà chửi thằng Google
-        let maLoi = error.status || error.code;
-        if (!maLoi && error.message) {
-            const timSoLoi = error.message.match(/\b(4\d\d|5\d\d)\b/);
-            maLoi = timSoLoi ? timSoLoi[0] : error.message.substring(0, 30) + "...";
+    // CƠ CHẾ TỰ ĐỘNG THỬ LẠI (AUTO-RETRY) TỐI ĐA 3 LẦN
+    const soLanThu = 3;
+    for (let i = 0; i < soLanThu; i++) {
+        try {
+            const result = await model.generateContent(thanChú);
+            const response = await result.response;
+            return response.text();
+        } catch (error) {
+            // Bắt mạch lỗi
+            let maLoi = error.status || error.code;
+            if (!maLoi && error.message) {
+                const timSoLoi = error.message.match(/\b(4\d\d|5\d\d)\b/);
+                maLoi = timSoLoi ? timSoLoi[0] : error.message.substring(0, 30) + "...";
+            }
+
+            // KHIÊN HỒI SINH: Nếu là lỗi 429 và chưa thử quá 3 lần -> Đợi 5 giây rồi gọi lại
+            if (maLoi == '429' && i < soLanThu - 1) {
+                console.log(`[API 429] Bị quá tải! Đang đợi 5 giây để thử lại lần ${i + 1}...`);
+                await sleep(5000); // Ngủ 5 giây để lách luật
+                continue; // Vòng lặp quay lại gọi API tiếp
+            }
+            
+            // Nếu thử 3 lần vẫn lỗi, hoặc dính mã lỗi nặng hơn (server sập) thì mới báo ra kênh
+            return `Má nó, tụi mày spam quá API Google đang bị kẹt mạng rồi (Mã lỗi: ${maLoi || 'Không xác định'}). Đợi khoảng 1 phút rồi hẵng réo tao nha!`;
         }
-        
-        return `Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp! (Mã lỗi: ${maLoi || 'Không xác định'})`;
     }
 }
 
