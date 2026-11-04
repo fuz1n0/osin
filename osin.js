@@ -58,7 +58,7 @@ const safetySettings = [
 ];
 
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-3.5-flash",
+    model: "gemini-3.5-flash", // Đã kéo về hiện tại, không xài 3.5 nữa!
     safetySettings: safetySettings 
 });
 let isOsinEnabled = true;
@@ -68,16 +68,13 @@ const cooldowns = new Map();
 
 async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
     try {
-        // ĐIỀN ID CỦA SẾP THẮNG VÀO ĐÂY (Chuột phải vào Avatar Sếp -> Copy User ID)
-        // Ví dụ: const ID_SEP_THANG = '123456789012345678';
         const ID_SEP_THANG = '1254142011863339039'; 
-        
         const isBoss = (idKhach === ID_SEP_THANG);
 
-        // Chế độ 2 mặt: Gặp sếp thì nịnh, gặp lính thì chửi
+        // NẠP LUÔN YÊU CẦU "CHỬI YÊU" VÀO NÃO NÓ Ở ĐÂY MỚI CHUẨN:
         const thaiDo = isBoss 
             ? "LƯU Ý TỐI QUAN TRỌNG: NGƯỜI ĐANG CHAT VỚI MÀY CHÍNH LÀ SẾP WINHP BẰNG XƯƠNG BẰNG THỊT! Mày phải ngoan ngoãn, dạ vâng, dạ sếp, nịnh nọt, bợ đỡ sếp lên tận mây xanh. Cấm tuyệt đối được hỗn láo!" 
-            : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, luôn bênh vực sếp Winhp tới cùng.";
+            : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương. ĐẶC BIỆT LƯU Ý: Nếu khách gọi mày bằng những từ thân mật (như eiu, em yêu, baby, bae, ck iu, vk iu...), mày hãy đùa cợt lại theo ngôn ngữ GenZ lả lơi, gọi bae/bby, sau đó chửi yêu tụi nó một câu thật bẩn bựa cho tao. Còn lại thì cứ chửi thẳng mặt, bênh vực sếp Winhp tới cùng.";
 
         const thanChú = `
         Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
@@ -92,7 +89,15 @@ async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
         return response.text();
     } catch (error) {
         console.error("Lỗi Google API:", error);
-        return "Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp!";
+        
+        // Bắt lỗi xịn xò để biết đường mà chửi thằng Google
+        let maLoi = error.status || error.code;
+        if (!maLoi && error.message) {
+            const timSoLoi = error.message.match(/\b(4\d\d|5\d\d)\b/);
+            maLoi = timSoLoi ? timSoLoi[0] : error.message.substring(0, 30) + "...";
+        }
+        
+        return `Lag não cmnr sếp ơi, API Google đang đi ẻ, chờ xíu phán tiếp! (Mã lỗi: ${maLoi || 'Không xác định'})`;
     }
 }
 
@@ -148,17 +153,17 @@ client.on(Events.MessageCreate, async (message) => {
         setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
 
         // Lọc chữ osin và tag để hiểu đúng câu hỏi
-        const cauHoi = message.content
+        // Lọc chữ osin và tag để hiểu đúng câu hỏi
+        let cauHoi = message.content
             .replace(/osin/gi, '')
             .replace(`<@${client.user.id}>`, '')
             .replace(`<@!${client.user.id}>`, '')
             .trim();
 
        if (!cauHoi || cauHoi.length < 2) {
-            // Bí thuật nhét chữ vào mồm: Bắt AI tự sáng tác ra câu chửi ngẫu nhiên!
-            cauHoi = "nếu gọi mà không hỏi thì tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật bẩn bựa vì cái tội làm phiền mày đi! nếu tao gọi mà kêu ngọt sớt như em yêu hay eiu hay tình yêu gì đó(gọi mày một cách thân mật) thì mày có thể đùa lại theo ngôn ngữ gen Z như người yêu hay bae hay bby xong mày có thể chửi tao một câu thật bẩn bựa cũng được. Chửi yêu tao đi!";
+            // Trả về logic gốc: Chỉ khịa vì tội réo tên đéo nói gì
+            cauHoi = "Tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật mỏ hỗn vì cái tội rảnh háng làm phiền mày đi!";
         } else if (cauHoi.length > 300) {
-            // Lưu ID để phạt cooldown luôn thằng viết sớ dài dòng
             cooldowns.set(message.author.id, Date.now());
             setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
             return message.reply('Mày viết sớ tế sao à? Dài quá tao lười đọc, túm cái váy lại dưới 300 chữ lẹ lên!');
