@@ -118,14 +118,15 @@ async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach, historyText) {
 }
 
 // ==========================================
-// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN
+// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN (TỐC ĐỘ CAO - KHÔNG ĐỌC LỊCH SỬ)
 // ==========================================
 client.on(Events.MessageCreate, async (message) => {
+    // 1. Chặn bot tự nói chuyện với chính mình (Chống tự kỷ / chống hacker lỏ tự spam)
     if (message.author.bot) return;
 
     const noiDung = message.content.toLowerCase().trim();
 
-    // 1. Công tắc rọ mõm (Chỉ Admin)
+    // 2. Công tắc rọ mõm (Chỉ Admin)
     if (noiDung === 'osin off' || noiDung === 'osin on') {
         if (!message.member.permissions.has('Administrator')) {
             return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
@@ -140,9 +141,9 @@ client.on(Events.MessageCreate, async (message) => {
         }
     }
 
-    // 2. Chửi lộn khi bị réo tên HOẶC bị Reply
     if (!isOsinEnabled) return;
 
+    // 3. Kiểm tra xem có bị réo tên hoặc reply bot không
     let biReo = noiDung.includes('osin') || message.mentions.has(client.user.id);
 
     if (!biReo && message.reference) {
@@ -153,8 +154,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
 
     if (biReo) {
-        // HỆ THỐNG BẢO MẬT CHỐNG SPAM API (COOLDOWN)
-        // Mỗi thằng chỉ được chat với bot 1 lần mỗi 2 giây
+        // KHIÊN COOLDOWN CÁ NHÂN (2 giây)
         const thoiGianCho = 2 * 1000; 
         if (cooldowns.has(message.author.id)) {
             const hetHan = cooldowns.get(message.author.id) + thoiGianCho;
@@ -163,67 +163,34 @@ client.on(Events.MessageCreate, async (message) => {
                 return message.reply(`Spam cc à? Bố mày đang bận dọn WC, ${conLai} giây nữa quay lại sủa tiếp!`);
             }
         }
-        // Lưu ID của thằng vừa chat vào danh sách đen tạm thời
         cooldowns.set(message.author.id, Date.now());
-        // Tự động xóa nó khỏi danh sách sau 10s cho nhẹ RAM
         setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
 
-        // Lọc chữ osin và tag để hiểu đúng câu hỏi
-        // Lọc chữ osin và tag để hiểu đúng câu hỏi
+        // Lọc bỏ chữ "osin" và tag để lấy câu hỏi sạch
         let cauHoi = message.content
             .replace(/osin/gi, '')
             .replace(`<@${client.user.id}>`, '')
             .replace(`<@!${client.user.id}>`, '')
             .trim();
 
-       if (!cauHoi || cauHoi.length < 2) {
-            // Trả về logic gốc: Chỉ khịa vì tội réo tên đéo nói gì
+        if (!cauHoi || cauHoi.length < 2) {
             cauHoi = "Tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật mỏ hỗn vì cái tội rảnh háng làm phiền mày đi!";
         } else if (cauHoi.length > 300) {
-            cooldowns.set(message.author.id, Date.now());
-            setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
             return message.reply('Mày viết sớ tế sao à? Dài quá tao lười đọc, túm cái váy lại dưới 300 chữ lẹ lên!');
         }
 
         await message.channel.sendTyping();
         
-        // 4. BÍ THUẬT LỤC TRÍ NHỚ (Đọc 5 câu gần nhất siêu tiết kiệm token)
-        const fetched = await message.channel.messages.fetch({ limit: 15 }); // Lấy dư ra 15 câu để lọc
-        const recentMsgs = Array.from(fetched.values());
-        const validHistory = [];
-        let botCount = 0;
-
-        for (const msg of recentMsgs) {
-            if (msg.id === message.id) continue; // Bỏ qua câu hỏi hiện tại
-            if (!msg.content || msg.content.length < 2) continue; // Bỏ qua ảnh hoặc câu trống
-
-            // Check xem tin nhắn là của ai
-            const isBot = msg.author.id === client.user.id;
-            
-            if (isBot) {
-                if (botCount >= 2) continue; // Quá 2 câu của con Osin thì bỏ qua
-                botCount++;
-            }
-
-            const tenNguoiChat = isBot ? 'Osin' : (msg.member ? msg.member.displayName : msg.author.username);
-            
-            // Xén bớt độ dài tin nhắn cũ (Tối đa 150 chữ mỗi câu) để né Spam API
-            let noiDungNgan = msg.content.substring(0, 150);
-            if (msg.content.length > 150) noiDungNgan += '...';
-
-            // Đẩy vào đầu mảng để lát nữa đọc theo thứ tự cũ -> mới
-            validHistory.unshift({ role: tenNguoiChat, content: noiDungNgan });
-
-            if (validHistory.length >= 5) break; // Đủ 5 câu thì dừng lục lọi
-        }
-
-        let historyText = "";
-        if (validHistory.length > 0) {
-            historyText = "--- LỊCH SỬ CHAT GẦN ĐÂY ĐỂ HIỂU NGỮ CẢNH ---\n" + 
-                          validHistory.map(m => `${m.role}: ${m.content}`).join("\n") + 
-                          "\n---------------------------------------------";
-        }
+        // GỌI TRỰC TIẾP API LUÔN - KHÔNG ĐỌC LỊCH SỬ NỮA CHO NHANH NHƯ TÊN BẮN
+        const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
+        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id);
         
+        return message.reply({
+            content: cauTraLoi,
+            allowedMentions: { repliedUser: false } 
+        });
+    }
+});
         // Gọi API Google với đầy đủ Ngữ cảnh
         const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
         const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id, historyText);
@@ -233,13 +200,6 @@ client.on(Events.MessageCreate, async (message) => {
             allowedMentions: { repliedUser: false } 
         });
         
-        return message.reply({
-            content: cauTraLoi,
-            allowedMentions: { repliedUser: false } 
-        });
-    }
-});
-
 // ==========================================
 // SERVER GIỮ MẠNG (HEALTH SERVER)
 // ==========================================
