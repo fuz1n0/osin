@@ -33,22 +33,37 @@ const client = new Client({
 });
 
 // ==========================================
-// KHỞI TẠO BỘ NÃO GEMINI CHO OSIN
+// KHỞI TẠO BỘ NÃO GEMINI VÀ BẢO MẬT COOLDOWN
 // ==========================================
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" }); // Sửa lại thành 1.5-flash
+const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
 let isOsinEnabled = true;
 
-async function osinTraTreo(tinNhanCuaKhach) {
+// Bộ nhớ RAM để chống Spam API
+const cooldowns = new Map(); 
+
+async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
     try {
+        // ĐIỀN ID CỦA SẾP THẮNG VÀO ĐÂY (Chuột phải vào Avatar Sếp -> Copy User ID)
+        // Ví dụ: const ID_SEP_THANG = '123456789012345678';
+        const ID_SEP_THANG = '1254142011863339039'; 
+        
+        const isBoss = (idKhach === ID_SEP_THANG);
+
+        // Chế độ 2 mặt: Gặp sếp thì nịnh, gặp lính thì chửi
+        const thaiDo = isBoss 
+            ? "LƯU Ý TỐI QUAN TRỌNG: NGƯỜI ĐANG CHAT VỚI MÀY CHÍNH LÀ SẾP WINHP BẰNG XƯƠNG BẰNG THỊT! Mày phải ngoan ngoãn, dạ vâng, dạ sếp, nịnh nọt, bợ đỡ sếp lên tận mây xanh. Cấm tuyệt đối được hỗn láo!" 
+            : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, luôn bênh vực sếp Winhp tới cùng.";
+
         const thanChú = `
-        Mày là 'Osin', một con bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp (Thắng đi rừng). 
-        Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương kiểu game thủ LOL, nhưng luôn bênh vực sếp Winhp.
-        Trang bị vốn từ GenZ, toxic nhẹ nhưng mang tính tấu hài là chính.
-        Bây giờ khách trong server chat câu này, mày rep lại nó thật thâm thúy ngắn gọn cho tao: 
+        Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
+        Người đang chat với mày tên là: ${tenKhach}.
+        ${thaiDo}
+        Bây giờ họ chat câu này, mày rep lại ngắn gọn cho tao: 
         "${tinNhanCuaKhach}"
         `;
+
         const result = await model.generateContent(thanChú);
         const response = await result.response;
         return response.text();
@@ -84,20 +99,32 @@ client.on(Events.MessageCreate, async (message) => {
     // 2. Chửi lộn khi bị réo tên HOẶC bị Reply
     if (!isOsinEnabled) return;
 
-    // Xác định xem bot có đang bị réo không (có chữ "osin" hoặc bị Tag thẳng mặt)
     let biReo = noiDung.includes('osin') || message.mentions.has(client.user.id);
 
-    // Cực kỳ quan trọng: Nếu khách không gọi "osin", không tag, NHƯNG bấm nút Reply tin nhắn của bot
     if (!biReo && message.reference) {
         const tinNhanGoc = await message.fetchReference().catch(() => null);
-        // Nếu tin nhắn gốc đúng là của con Osin thì tính là đang bị réo
         if (tinNhanGoc && tinNhanGoc.author.id === client.user.id) {
             biReo = true; 
         }
     }
 
     if (biReo) {
-        // Lọc bỏ chữ "osin" và cái tag ID của bot ra để AI đọc câu hỏi không bị lú
+        // HỆ THỐNG BẢO MẬT CHỐNG SPAM API (COOLDOWN)
+        // Mỗi thằng chỉ được chat với bot 1 lần mỗi 10 giây
+        const thoiGianCho = 10 * 1000; 
+        if (cooldowns.has(message.author.id)) {
+            const hetHan = cooldowns.get(message.author.id) + thoiGianCho;
+            if (Date.now() < hetHan) {
+                const conLai = ((hetHan - Date.now()) / 1000).toFixed(1);
+                return message.reply(`Spam cc à? Bố mày đang bận dọn WC, ${conLai} giây nữa quay lại sủa tiếp!`);
+            }
+        }
+        // Lưu ID của thằng vừa chat vào danh sách đen tạm thời
+        cooldowns.set(message.author.id, Date.now());
+        // Tự động xóa nó khỏi danh sách sau 10s cho nhẹ RAM
+        setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
+
+        // Lọc chữ osin và tag để hiểu đúng câu hỏi
         const cauHoi = message.content
             .replace(/osin/gi, '')
             .replace(`<@${client.user.id}>`, '')
@@ -109,10 +136,14 @@ client.on(Events.MessageCreate, async (message) => {
         }
 
         await message.channel.sendTyping();
-        const cauTraLoi = await osinTraTreo(cauHoi);
+        
+        // Cấp thêm dữ liệu Tên và ID cho AI nhận diện
+        const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
+        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id);
+        
         return message.reply({
             content: cauTraLoi,
-            allowedMentions: { repliedUser: false } // Tắt ping để khỏi réo ồn ào sếp Thắng
+            allowedMentions: { repliedUser: false } 
         });
     }
 });
