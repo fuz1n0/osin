@@ -69,7 +69,7 @@ const cooldowns = new Map();
 // Thêm bùa "Ngủ đông" để bot biết cách chờ đợi
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
+async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach, historyText) {
     const ID_SEP_THANG = '1254142011863339039'; 
     const isBoss = (idKhach === ID_SEP_THANG);
 
@@ -81,7 +81,10 @@ async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
     Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
     Người đang chat với mày tên là: ${tenKhach}.
     ${thaiDo}
-    Bây giờ họ chat câu này, mày rep lại ngắn gọn cho tao: 
+
+    ${historyText}
+
+    Bây giờ khách đang nói câu này, mày hãy dựa vào ngữ cảnh ở trên để rep lại: 
     "${tinNhanCuaKhach}"
     `;
 
@@ -183,9 +186,51 @@ client.on(Events.MessageCreate, async (message) => {
 
         await message.channel.sendTyping();
         
-        // Cấp thêm dữ liệu Tên và ID cho AI nhận diện
+        // 4. BÍ THUẬT LỤC TRÍ NHỚ (Đọc 5 câu gần nhất siêu tiết kiệm token)
+        const fetched = await message.channel.messages.fetch({ limit: 15 }); // Lấy dư ra 15 câu để lọc
+        const recentMsgs = Array.from(fetched.values());
+        const validHistory = [];
+        let botCount = 0;
+
+        for (const msg of recentMsgs) {
+            if (msg.id === message.id) continue; // Bỏ qua câu hỏi hiện tại
+            if (!msg.content || msg.content.length < 2) continue; // Bỏ qua ảnh hoặc câu trống
+
+            // Check xem tin nhắn là của ai
+            const isBot = msg.author.id === client.user.id;
+            
+            if (isBot) {
+                if (botCount >= 2) continue; // Quá 2 câu của con Osin thì bỏ qua
+                botCount++;
+            }
+
+            const tenNguoiChat = isBot ? 'Osin' : (msg.member ? msg.member.displayName : msg.author.username);
+            
+            // Xén bớt độ dài tin nhắn cũ (Tối đa 150 chữ mỗi câu) để né Spam API
+            let noiDungNgan = msg.content.substring(0, 150);
+            if (msg.content.length > 150) noiDungNgan += '...';
+
+            // Đẩy vào đầu mảng để lát nữa đọc theo thứ tự cũ -> mới
+            validHistory.unshift({ role: tenNguoiChat, content: noiDungNgan });
+
+            if (validHistory.length >= 5) break; // Đủ 5 câu thì dừng lục lọi
+        }
+
+        let historyText = "";
+        if (validHistory.length > 0) {
+            historyText = "--- LỊCH SỬ CHAT GẦN ĐÂY ĐỂ HIỂU NGỮ CẢNH ---\n" + 
+                          validHistory.map(m => `${m.role}: ${m.content}`).join("\n") + 
+                          "\n---------------------------------------------";
+        }
+        
+        // Gọi API Google với đầy đủ Ngữ cảnh
         const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
-        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id);
+        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id, historyText);
+        
+        return message.reply({
+            content: cauTraLoi,
+            allowedMentions: { repliedUser: false } 
+        });
         
         return message.reply({
             content: cauTraLoi,
