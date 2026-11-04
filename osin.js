@@ -154,8 +154,14 @@ client.on(Events.MessageCreate, async (message) => {
             .replace(`<@!${client.user.id}>`, '')
             .trim();
 
-        if (!cauHoi) {
-            return message.reply('Mày réo tên tao rồi để đấy à? Rảnh háng hả?');
+       if (!cauHoi || cauHoi.length < 2) {
+            // Bí thuật nhét chữ vào mồm: Bắt AI tự sáng tác ra câu chửi ngẫu nhiên!
+            cauHoi = "nếu gọi mà không hỏi thì tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật bẩn bựa vì cái tội làm phiền mày đi! nếu tao gọi mà kêu ngọt sớt như em yêu hay eiu hay tình yêu gì đó(gọi mày một cách thân mật) thì mày có thể đùa lại theo ngôn ngữ gen Z như người yêu hay bae hay bby xong mày có thể chửi tao một câu thật bẩn bựa cũng được. Chửi yêu tao đi!";
+        } else if (cauHoi.length > 300) {
+            // Lưu ID để phạt cooldown luôn thằng viết sớ dài dòng
+            cooldowns.set(message.author.id, Date.now());
+            setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
+            return message.reply('Mày viết sớ tế sao à? Dài quá tao lười đọc, túm cái váy lại dưới 300 chữ lẹ lên!');
         }
 
         await message.channel.sendTyping();
