@@ -2,7 +2,7 @@ import { createHealthServer } from './health-server.js';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
 import { TikTokLiveConnection } from 'tiktok-live-connector';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // Đã chuyển sang dùng import chuẩn chỉ
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'; // Đã chuyển sang dùng import chuẩn chỉ
 
 loadEnv();
 
@@ -35,9 +35,32 @@ const client = new Client({
 // ==========================================
 // KHỞI TẠO BỘ NÃO GEMINI VÀ BẢO MẬT COOLDOWN
 // ==========================================
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
+const safetySettings = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn chửi bới
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn ngôn từ thù ghét
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn nội dung bậy bạ
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+];
+
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-3.5-flash",
+    safetySettings: safetySettings 
+});
 let isOsinEnabled = true;
 
 // Bộ nhớ RAM để chống Spam API
@@ -110,8 +133,8 @@ client.on(Events.MessageCreate, async (message) => {
 
     if (biReo) {
         // HỆ THỐNG BẢO MẬT CHỐNG SPAM API (COOLDOWN)
-        // Mỗi thằng chỉ được chat với bot 1 lần mỗi 10 giây
-        const thoiGianCho = 10 * 1000; 
+        // Mỗi thằng chỉ được chat với bot 1 lần mỗi 2 giây
+        const thoiGianCho = 2 * 1000; 
         if (cooldowns.has(message.author.id)) {
             const hetHan = cooldowns.get(message.author.id) + thoiGianCho;
             if (Date.now() < hetHan) {
