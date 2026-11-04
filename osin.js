@@ -38,7 +38,7 @@ const client = new Client({
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-const safetySettings = [
+const cacBuaChu = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
     threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn chửi bới
@@ -57,9 +57,10 @@ const safetySettings = [
   },
 ];
 
+// Khởi tạo model theo ý ngài (Gemini 3.5 Flash)
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-3.5-flash", // Đã kéo về hiện tại, không xài 3.5 nữa!
-    safetySettings: safetySettings 
+    model: "gemini-3.5-flash",
+    safetySettings: cacBuaChu 
 });
 let isOsinEnabled = true;
 
