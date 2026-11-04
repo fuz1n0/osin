@@ -2,7 +2,7 @@ import { createHealthServer } from './health-server.js';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
 import { TikTokLiveConnection } from 'tiktok-live-connector';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'; // Đã chuyển sang dùng import chuẩn chỉ
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
 loadEnv();
 
@@ -41,15 +41,15 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 const cacBuaChu = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn chửi bới
+    threshold: HarmBlockThreshold.BLOCK_NONE,
   },
   {
     category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn ngôn từ thù ghét
+    threshold: HarmBlockThreshold.BLOCK_NONE,
   },
   {
     category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_NONE, // Tắt chặn nội dung bậy bạ
+    threshold: HarmBlockThreshold.BLOCK_NONE,
   },
   {
     category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
@@ -57,20 +57,16 @@ const cacBuaChu = [
   },
 ];
 
-// Khởi tạo model theo ý ngài (Gemini 3.5 Flash)
 const model = genAI.getGenerativeModel({ 
     model: "gemini-3.5-flash",
     safetySettings: cacBuaChu 
 });
 let isOsinEnabled = true;
 
-// Bộ nhớ RAM để chống Spam API
 const cooldowns = new Map(); 
-
-// Thêm bùa "Ngủ đông" để bot biết cách chờ đợi
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach, historyText) {
+async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
     const ID_SEP_THANG = '1254142011863339039'; 
     const isBoss = (idKhach === ID_SEP_THANG);
 
@@ -83,13 +79,10 @@ async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach, historyText) {
     Người đang chat với mày tên là: ${tenKhach}.
     ${thaiDo}
 
-    ${historyText}
-
-    Bây giờ khách đang nói câu này, mày hãy dựa vào ngữ cảnh ở trên để rep lại: 
+    Bây giờ khách đang nói câu này, mày hãy rep lại ngắn gọn: 
     "${tinNhanCuaKhach}"
     `;
 
-    // CƠ CHẾ TỰ ĐỘNG THỬ LẠI (AUTO-RETRY) TỐI ĐA 3 LẦN
     const soLanThu = 3;
     for (let i = 0; i < soLanThu; i++) {
         try {
@@ -97,36 +90,31 @@ async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach, historyText) {
             const response = await result.response;
             return response.text();
         } catch (error) {
-            // Bắt mạch lỗi
             let maLoi = error.status || error.code;
             if (!maLoi && error.message) {
                 const timSoLoi = error.message.match(/\b(4\d\d|5\d\d)\b/);
                 maLoi = timSoLoi ? timSoLoi[0] : error.message.substring(0, 30) + "...";
             }
 
-            // KHIÊN HỒI SINH: Nếu là lỗi 429 và chưa thử quá 3 lần -> Đợi 5 giây rồi gọi lại
             if (maLoi == '429' && i < soLanThu - 1) {
                 console.log(`[API 429] Bị quá tải! Đang đợi 5 giây để thử lại lần ${i + 1}...`);
-                await sleep(5000); // Ngủ 5 giây để lách luật
-                continue; // Vòng lặp quay lại gọi API tiếp
+                await sleep(5000);
+                continue;
             }
             
-            // Nếu thử 3 lần vẫn lỗi, hoặc dính mã lỗi nặng hơn (server sập) thì mới báo ra kênh
             return `Má nó, tụi mày spam quá API Google đang bị kẹt mạng rồi (Mã lỗi: ${maLoi || 'Không xác định'}). Đợi khoảng 1 phút rồi hẵng réo tao nha!`;
         }
     }
 }
 
 // ==========================================
-// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN (TỐC ĐỘ CAO - KHÔNG ĐỌC LỊCH SỬ)
+// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN (TỐC ĐỘ CAO)
 // ==========================================
 client.on(Events.MessageCreate, async (message) => {
-    // 1. Chặn bot tự nói chuyện với chính mình (Chống tự kỷ / chống hacker lỏ tự spam)
     if (message.author.bot) return;
 
     const noiDung = message.content.toLowerCase().trim();
 
-    // 2. Công tắc rọ mõm (Chỉ Admin)
     if (noiDung === 'osin off' || noiDung === 'osin on') {
         if (!message.member.permissions.has('Administrator')) {
             return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
@@ -143,7 +131,6 @@ client.on(Events.MessageCreate, async (message) => {
 
     if (!isOsinEnabled) return;
 
-    // 3. Kiểm tra xem có bị réo tên hoặc reply bot không
     let biReo = noiDung.includes('osin') || message.mentions.has(client.user.id);
 
     if (!biReo && message.reference) {
@@ -154,7 +141,6 @@ client.on(Events.MessageCreate, async (message) => {
     }
 
     if (biReo) {
-        // KHIÊN COOLDOWN CÁ NHÂN (2 giây)
         const thoiGianCho = 2 * 1000; 
         if (cooldowns.has(message.author.id)) {
             const hetHan = cooldowns.get(message.author.id) + thoiGianCho;
@@ -166,7 +152,6 @@ client.on(Events.MessageCreate, async (message) => {
         cooldowns.set(message.author.id, Date.now());
         setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
 
-        // Lọc bỏ chữ "osin" và tag để lấy câu hỏi sạch
         let cauHoi = message.content
             .replace(/osin/gi, '')
             .replace(`<@${client.user.id}>`, '')
@@ -181,7 +166,6 @@ client.on(Events.MessageCreate, async (message) => {
 
         await message.channel.sendTyping();
         
-        // GỌI TRỰC TIẾP API LUÔN - KHÔNG ĐỌC LỊCH SỬ NỮA CHO NHANH NHƯ TÊN BẮN
         const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
         const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id);
         
@@ -191,15 +175,7 @@ client.on(Events.MessageCreate, async (message) => {
         });
     }
 });
-        // Gọi API Google với đầy đủ Ngữ cảnh
-        const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
-        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id, historyText);
-        
-        return message.reply({
-            content: cauTraLoi,
-            allowedMentions: { repliedUser: false } 
-        });
-        
+
 // ==========================================
 // SERVER GIỮ MẠNG (HEALTH SERVER)
 // ==========================================
