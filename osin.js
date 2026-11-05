@@ -24,160 +24,84 @@ if (!config.discordToken) {
 	process.exit(1);
 }
 
-const client = new Client({
-	intents: [
-		GatewayIntentBits.Guilds,
-		GatewayIntentBits.GuildMessages,
-		GatewayIntentBits.MessageContent,
-	],
-});
-
 // ==========================================
-// KHỞI TẠO BỘ NÃO GEMINI VÀ BẢO MẬT COOLDOWN
+// 1. KHỞI TẠO DISCORD & BỘ NÃO AI
 // ==========================================
-
+const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent ]});
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
 const cacBuaChu = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 ];
 
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-3.5-flash",
-    safetySettings: cacBuaChu 
-});
+const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", safetySettings: cacBuaChu }); 
 let isOsinEnabled = true;
-
 const cooldowns = new Map(); 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function osinTraTreo(tinNhanCuaKhach, tenKhach, idKhach) {
     const ID_SEP_THANG = '1254142011863339039'; 
-    const isBoss = (idKhach === ID_SEP_THANG);
-
-    const thaiDo = isBoss 
+    const thaiDo = (idKhach === ID_SEP_THANG) 
         ? "LƯU Ý TỐI QUAN TRỌNG: NGƯỜI ĐANG CHAT VỚI MÀY CHÍNH LÀ SẾP WINHP BẰNG XƯƠNG BẰNG THỊT! Mày phải ngoan ngoãn, dạ vâng, dạ sếp, nịnh nọt, bợ đỡ sếp lên tận mây xanh. Cấm tuyệt đối được hỗn láo!" 
-        : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương. ĐẶC BIỆT LƯU Ý: Nếu khách gọi mày bằng những từ thân mật (như eiu, em yêu, baby, bae, ck iu, vk iu...), mày hãy đùa cợt lại theo ngôn ngữ GenZ lả lơi, gọi bae/bby, sau đó chửi yêu tụi nó một câu thật bẩn bựa cho tao. Còn lại thì cứ chửi thẳng mặt, bênh vực sếp Winhp tới cùng.";
+        : "Tính cách của mày: mỏ hỗn, bẩn bựa, hay cà khịa, chửi thề sương sương. ĐẶC BIỆT LƯU Ý: Nếu khách gọi mày bằng những từ thân mật (như eiu, baby...), mày hãy đùa cợt lả lơi, sau đó chửi yêu thật bẩn bựa cho tao. Còn lại thì cứ chửi thẳng mặt, bênh vực sếp Winhp tới cùng.";
 
-    const thanChú = `
-    Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp.
-    Người đang chat với mày tên là: ${tenKhach}.
-    ${thaiDo}
+    const thanChú = `Mày là 'Osin', bot tấu hài trong server Discord 'HỘI HÀI DÓN' của sếp Winhp. Người đang chat là: ${tenKhach}. ${thaiDo}\nKhách vừa chat: "${tinNhanCuaKhach}". Hãy rep lại ngắn gọn!`;
 
-    Bây giờ khách đang nói câu này, mày hãy rep lại ngắn gọn: 
-    "${tinNhanCuaKhach}"
-    `;
-
-    const soLanThu = 3;
-    for (let i = 0; i < soLanThu; i++) {
+    for (let i = 0; i < 3; i++) {
         try {
             const result = await model.generateContent(thanChú);
-            const response = await result.response;
-            return response.text();
+            return (await result.response).text();
         } catch (error) {
-            let maLoi = error.status || error.code;
-            if (!maLoi && error.message) {
-                const timSoLoi = error.message.match(/\b(4\d\d|5\d\d)\b/);
-                maLoi = timSoLoi ? timSoLoi[0] : error.message.substring(0, 30) + "...";
-            }
-
-            if (maLoi == '429' && i < soLanThu - 1) {
-                console.log(`[API 429] Bị quá tải! Đang đợi 5 giây để thử lại lần ${i + 1}...`);
-                await sleep(5000);
-                continue;
-            }
-            
-            return `Má nó, tụi mày spam quá API Google đang bị kẹt mạng rồi (Mã lỗi: ${maLoi || 'Không xác định'}). Đợi khoảng 1 phút rồi hẵng réo tao nha!`;
+            let maLoi = error.status || error.code || (error.message.match(/\b(4\d\d|5\d\d)\b/)?.[0]) || "Không rõ";
+            if (maLoi == '429' && i < 2) { await sleep(5000); continue; }
+            return `Má nó, tụi mày spam quá API Google đang bị kẹt mạng rồi (Mã lỗi: ${maLoi}). Đợi 1 phút rồi hẵng réo tao nha!`;
         }
     }
 }
 
 // ==========================================
-// XỬ LÝ LỆNH CHAT VÀ GỌI OSIN (TỐC ĐỘ CAO)
+// 2. LẮNG NGHE LỆNH DISCORD
 // ==========================================
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
-
     const noiDung = message.content.toLowerCase().trim();
 
     if (noiDung === 'osin off' || noiDung === 'osin on') {
-        if (!message.member.permissions.has('Administrator')) {
-            return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
-        }
-
-        if (noiDung === 'osin off') {
-            isOsinEnabled = false;
-            return message.reply('Đã ngậm mồm! Osin đi ngủ đây, cấm đứa nào làm phiền!');
-        } else {
-            isOsinEnabled = true;
-            return message.reply('Osin đã thức giấc! Đứa nào láo nháo tao tế sống!');
-        }
+        if (!message.member.permissions.has('Administrator')) return message.reply('Mày tuổi gì đòi rọ mõm tao? Kêu sếp Thắng ra đây nói chuyện!');
+        isOsinEnabled = (noiDung === 'osin on');
+        return message.reply(isOsinEnabled ? 'Osin đã thức giấc! Đứa nào láo nháo tao tế sống!' : 'Đã ngậm mồm! Osin đi ngủ đây, cấm đứa nào làm phiền!');
     }
 
     if (!isOsinEnabled) return;
-
     let biReo = noiDung.includes('osin') || message.mentions.has(client.user.id);
-
     if (!biReo && message.reference) {
         const tinNhanGoc = await message.fetchReference().catch(() => null);
-        if (tinNhanGoc && tinNhanGoc.author.id === client.user.id) {
-            biReo = true; 
-        }
+        if (tinNhanGoc && tinNhanGoc.author.id === client.user.id) biReo = true; 
     }
 
     if (biReo) {
-        const thoiGianCho = 2 * 1000; 
-        if (cooldowns.has(message.author.id)) {
-            const hetHan = cooldowns.get(message.author.id) + thoiGianCho;
-            if (Date.now() < hetHan) {
-                const conLai = ((hetHan - Date.now()) / 1000).toFixed(1);
-                return message.reply(`Spam cc à? Bố mày đang bận dọn WC, ${conLai} giây nữa quay lại sủa tiếp!`);
-            }
+        const thoiGianCho = 2000; 
+        if (cooldowns.has(message.author.id) && Date.now() < cooldowns.get(message.author.id) + thoiGianCho) {
+            const conLai = (((cooldowns.get(message.author.id) + thoiGianCho) - Date.now()) / 1000).toFixed(1);
+            return message.reply(`Spam cc à? Bố mày đang bận dọn WC, ${conLai}s nữa quay lại sủa tiếp!`);
         }
         cooldowns.set(message.author.id, Date.now());
         setTimeout(() => cooldowns.delete(message.author.id), thoiGianCho);
 
-        let cauHoi = message.content
-            .replace(/osin/gi, '')
-            .replace(`<@${client.user.id}>`, '')
-            .replace(`<@!${client.user.id}>`, '')
-            .trim();
-
-        if (!cauHoi || cauHoi.length < 2) {
-            cauHoi = "Tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật mỏ hỗn vì cái tội rảnh háng làm phiền mày đi!";
-        } else if (cauHoi.length > 300) {
-            return message.reply('Mày viết sớ tế sao à? Dài quá tao lười đọc, túm cái váy lại dưới 300 chữ lẹ lên!');
-        }
+        let cauHoi = message.content.replace(/osin/gi, '').replace(`<@${client.user.id}>`, '').replace(`<@!${client.user.id}>`, '').trim();
+        if (!cauHoi || cauHoi.length < 2) cauHoi = "Tao vừa réo tên mày cho vui thôi chứ không có việc gì đâu. Chửi tao một câu thật mỏ hỗn vì tội làm phiền đi!";
+        else if (cauHoi.length > 300) return message.reply('Mày viết sớ tế sao à? Dài quá tao lười đọc, túm cái váy lại dưới 300 chữ lẹ lên!');
 
         await message.channel.sendTyping();
-        
-        const tenNguoiGui = message.member ? message.member.displayName : message.author.username;
-        const cauTraLoi = await osinTraTreo(cauHoi, tenNguoiGui, message.author.id);
-        
-        return message.reply({
-            content: cauTraLoi,
-            allowedMentions: { repliedUser: false } 
-        });
+        const cauTraLoi = await osinTraTreo(cauHoi, (message.member ? message.member.displayName : message.author.username), message.author.id);
+        return message.reply({ content: cauTraLoi, allowedMentions: { repliedUser: false } });
     }
 });
 
 // ==========================================
-// SERVER GIỮ MẠNG (HEALTH SERVER)
+// 3. SERVER GIỮ MẠNG (UPTIME ROBOT YÊU THÍCH CỦA NGÀI)
 // ==========================================
 const healthServer = createHealthServer(() => client.isReady());
 
@@ -191,185 +115,136 @@ healthServer.listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
 });
 
 // ==========================================
-// THÔNG BÁO LIVE VÀ VIDEO YT / TIKTOK
+// 4. KHO TÀNG 15 CÂU THÔNG BÁO HỆ GEN Z MỎ HỖN
 // ==========================================
-client.once(Events.ClientReady, (readyClient) => {
-	console.log(`Bot đã online: ${readyClient.user.tag}`);
-	startConfiguredWatchers();
-});
+const ytLiveTemplates = [
+    '🔴 ÉT Ô ÉT! Sếp Winhp đang lên live rắc muối trên YouTube rùi ae ơi! Khum xem đêm nay mất ngủ ráng chịu nha: {url}',
+    '🔴 Kèo thơm kèo thơm! Sếp Thắng đang live YouTube gòi. AE vào buff view nhiệt tình cho Osin có tiền mua trà sữa coi, nghèo quá rùi: {url}',
+    '🔴 Đỉnh nóc kịch trần bay phấp phới lun ae ơi! Sếp Thắng đang live YouTube, vứt hết deadline vào donate cho sếp lẹ: {url}',
+    '🔴 Trầm cảm quá thì làm gì? Lên YouTube xem idol Winhp tấu hề chữa lành (hoặc rách vết thương) nà mấy bácc: {url}',
+    '🔴 Ai đó giải cứu sếp Thắng khỏi sự vô tri này đi!! Sếp đang gào thét trên YouTube kìa mấy má, link đây nhấp lẹ: {url}'
+];
 
-function startPolling(name, intervalMs, check) {
-	const run = async () => {
-		try {
-			await check();
-		} catch (error) {
-			console.error(`[${name}] Lỗi kiểm tra:`, error);
-			const causes = error?.config?.requestErrs;
-			if (Array.isArray(causes) && causes.length > 0) {
-				console.error(
-					`[${name}] Lỗi từ các nguồn dự phòng:\n${causes
-						.map((cause) => cause?.stack ?? String(cause))
-						.join('\n')}`,
-				);
-			}
-		} finally {
-			setTimeout(run, intervalMs);
-		}
-	};
-	void run();
+const ttLiveTemplates = [
+    '🎵 Ối dồi ôi, idol Winhp đang ngoáy mông trên tóp tóp kìa! AE bơi vào nhấp tim cháy máy cho sếp sướng coi: {url}',
+    '🎵 Cảm lạnh thực sự... Sếp Thắng đang live tóp tóp làm trò con bò kìa ae ơi, vào xem ổng flex độ vô tri nà: {url}',
+    '🎵 Quá ố dề rùi! Sếp Winhp đang múa quạt trên tóp tóp, ae vào spam comment khịa ổng lẹ lên: {url}',
+    '🎵 Sếp Thắng đang live tóp tóp lùa gà kìa ae!! Nhanh tay vào thả tim khum ổng dỗi ổng trừ lương Osin bi chừ: {url}',
+    '🎵 Hội mỏ hỗn điểm danh! Sếp Thắng đang live tóp tóp, ae vào combat bằng tim cho sập cái live của ổng lun điiii: {url}'
+];
+
+const ytVideoTemplates = [
+    '📺 Mới ra lò nóng hổi lun! Sếp Thắng vừa thả xích siêu phẩm: **{title}**\nKhứa nào khum xem sếp tế sống ráng chịu: {url}',
+    '📺 Đỉnh của chóp!! Sếp Winhp vừa up video mới dòi: **{title}**\nCày view lẹ cho sếp mua mồi cho Osin ăn coi: {url}',
+    '📺 Chằm zn với content này lun á! Sếp Thắng vừa ra lò quả video nhức nách: **{title}**\nBấm zô cày lẹ, khum xem tiếc 10 kiếp: {url}',
+    '📺 Ê nhõi, sếp Thắng mới ra clip mới kìa: **{title}**\nLuật hoa quả không chừa một ai nếu ae khum bấm vào cái link này cày view: {url}',
+    '📺 Hào quang rực rỡ chiếu rọi Tửu Lầu! Sếp Thắng vừa nhả video: **{title}**\nVào thẩm lẹ, 10 điểm không có nhưng nàoooo: {url}'
+];
+
+function pickRandomMsg(templates, url, title = '') {
+    return templates[Math.floor(Math.random() * templates.length)].replace('{url}', url).replace('{title}', title);
 }
 
-function startConfiguredWatchers() {
-	if (
-		config.youtubeApiKey &&
-		config.youtubeChannel &&
-		(config.youtubeNotificationChannelId || config.youtubeVideoNotificationChannelId)
-	) {
-		if (!config.youtubeVideoNotificationChannelId) {
-			console.log('Thông báo video YouTube đang tắt: hãy cấu hình YOUTUBE_VIDEO_NOTIFICATION_CHANNEL_ID.');
-		}
-		startPolling('YouTube', config.youtubePollIntervalMs, checkYouTube);
-	}
-
-	if (config.tiktokAccount && config.tiktokNotificationChannelId) {
-		startPolling('TikTok', config.tiktokPollIntervalMs, checkTikTokLive);
-	}
-}
-
-async function postLiveAlert(platform, channelId, url) {
-	const channel = await client.channels.fetch(channelId);
-	if (!channel?.isTextBased() || !channel.send) return;
-
-	const templates = platform === 'YouTube'
-		? ['🔴 OI OI, rạp xiếc trung ương WINHP chính thức mở cửa trên YouTube! Vào mua vé lẹ: {url}']
-		: ['🎵 OI OI, sếp Thắng đang ngoáy trên tóp tóp kìa ae, vào thả tim sập live đi: {url}'];
-	
-	const message = `@everyone\n${pickRandomTemplate(platform, templates).replace('{url}', url)}`;
-
-	await channel.send({ content: message, allowedMentions: { parse: ['everyone'] } });
-	console.log(`[${platform}] Đã gửi thông báo live.`);
-}
-
-const lastLiveTemplateIndexes = new Map();
-const lastVideoTemplateIndexes = new Map();
-
-function pickRandomTemplate(key, templates, previousIndexes = lastLiveTemplateIndexes) {
-	let index = Math.floor(Math.random() * templates.length);
-	previousIndexes.set(key, index);
-	return templates[index];
-}
-
-async function postYoutubeVideoAlert(title, videoId) {
-	const channelId = config.youtubeVideoNotificationChannelId;
-	const channel = await client.channels.fetch(channelId);
-	if (!channel?.isTextBased() || !channel.send) return;
-
-	const safeTitle = title.replace(/@/g, '@\u200b');
-	const roleMention = config.youtubeVideoNotificationRoleId ? `<@&${config.youtubeVideoNotificationRoleId}> ` : '@everyone ';
-	
-	await channel.send({
-		content: `${roleMention}📺 Alo alo! Sếp Thắng vừa thả hàng mới lên YouTube rồi đó bà con: **${safeTitle}**\nhttps://www.youtube.com/watch?v=${videoId}`,
-		allowedMentions: { parse: config.youtubeVideoNotificationRoleId ? [] : ['everyone'], roles: config.youtubeVideoNotificationRoleId ? [config.youtubeVideoNotificationRoleId] : [] },
-	});
-}
-
-function youtubeChannelReference(value) {
-	const channelIdMatch = value.match(/(?:youtube\.com\/channel\/)?(UC[\w-]{22})/i);
-	if (channelIdMatch) return { channelId: channelIdMatch[1] };
-	const handleMatch = value.match(/@([\w.-]+)/);
-	if (handleMatch) return { handle: handleMatch[1] };
-	return value.trim().replace(/^@/, '') ? { handle: value.trim().replace(/^@/, '') } : null;
-}
+// ==========================================
+// 5. THÔNG BÁO LIVE VÀ VIDEO YT / TIKTOK
+// ==========================================
+let cachedYoutubeChannelId, youtubeUploadsPlaylistId, announcedYoutubeLiveId, announcedYoutubeUploadId;
+let initializedYoutubeVideos = false;
+let initializedYoutubeLive = false; // Bùa chống spam YT lúc mới dậy
+const announcedYoutubeLiveIds = new Set();
+const tiktokConnection = config.tiktokAccount ? new TikTokLiveConnection(config.tiktokAccount.match(/@([\w.-]+)/)?.[1] ?? config.tiktokAccount.trim().replace(/^@/, '').replace(/\/$/, ''), {}) : null;
+let wasTikTokLive = false;
+let initializedTikTokLive = false; // Bùa chống spam TikTok lúc mới dậy
 
 async function youtubeApiRequest(params) {
-	const url = new URL('https://www.googleapis.com/youtube/v3/' + params.endpoint);
-	for (const [key, value] of Object.entries(params.query)) url.searchParams.set(key, value);
-	url.searchParams.set('key', config.youtubeApiKey);
-
-	const response = await fetch(url);
-	if (!response.ok) throw new Error(`YouTube API trả về HTTP ${response.status}.`);
-	return response.json();
-}
-
-let cachedYoutubeChannelId;
-let youtubeUploadsPlaylistId;
-let announcedYoutubeLiveId;
-let announcedYoutubeUploadId;
-let initializedYoutubeVideos = false;
-const announcedYoutubeLiveIds = new Set();
-
-async function ensureYoutubeChannel() {
-	if (!cachedYoutubeChannelId) {
-		const reference = youtubeChannelReference(config.youtubeChannel);
-		const query = { part: 'id,contentDetails' };
-		if (reference.channelId) query.id = reference.channelId;
-		else query.forHandle = reference.handle;
-
-		const data = await youtubeApiRequest({ endpoint: 'channels', query });
-		cachedYoutubeChannelId = data.items?.[0]?.id;
-		youtubeUploadsPlaylistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-	}
-}
-
-async function checkYouTubeLive() {
-	if (!config.youtubeNotificationChannelId) return;
-	const data = await youtubeApiRequest({
-		endpoint: 'search',
-		query: { part: 'id', channelId: cachedYoutubeChannelId, eventType: 'live', type: 'video', maxResults: '1' },
-	});
-	const videoId = data.items?.[0]?.id?.videoId;
-
-	if (!videoId || videoId === announcedYoutubeLiveId) return;
-	await postLiveAlert('YouTube', config.youtubeNotificationChannelId, `https://www.youtube.com/watch?v=${videoId}`);
-	announcedYoutubeLiveId = videoId;
-	announcedYoutubeLiveIds.add(videoId);
-}
-
-async function checkYouTubeVideos() {
-	if (!config.youtubeVideoNotificationChannelId) return;
-	const data = await youtubeApiRequest({
-		endpoint: 'playlistItems',
-		query: { part: 'snippet', playlistId: youtubeUploadsPlaylistId, maxResults: '1' },
-	});
-	const latestVideo = data.items?.[0]?.snippet;
-	const videoId = latestVideo?.resourceId?.videoId;
-
-	if (!initializedYoutubeVideos) {
-		announcedYoutubeUploadId = videoId;
-		initializedYoutubeVideos = true;
-		return;
-	}
-	if (!videoId || videoId === announcedYoutubeUploadId || announcedYoutubeLiveIds.has(videoId)) return;
-
-	const details = await youtubeApiRequest({ endpoint: 'videos', query: { part: 'snippet,liveStreamingDetails', id: videoId } });
-	const video = details.items?.[0];
-
-	if (video?.snippet?.liveBroadcastContent !== 'none' || video?.liveStreamingDetails) return;
-
-	await postYoutubeVideoAlert(video.snippet?.title ?? 'Video mới', videoId);
-	announcedYoutubeUploadId = videoId;
+    const url = new URL('https://www.googleapis.com/youtube/v3/' + params.endpoint);
+    for (const [key, value] of Object.entries(params.query)) url.searchParams.set(key, value);
+    url.searchParams.set('key', config.youtubeApiKey);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`YouTube API trả về HTTP ${response.status}.`);
+    return response.json();
 }
 
 async function checkYouTube() {
-	await ensureYoutubeChannel();
-	await checkYouTubeLive();
-	await checkYouTubeVideos();
+    if (!cachedYoutubeChannelId) {
+        const ref = config.youtubeChannel.match(/(?:youtube\.com\/channel\/)?(UC[\w-]{22})/i)?.[1] ? { id: config.youtubeChannel.match(/(?:youtube\.com\/channel\/)?(UC[\w-]{22})/i)[1] } : { forHandle: config.youtubeChannel.match(/@([\w.-]+)/)?.[1] ?? config.youtubeChannel.trim().replace(/^@/, '') };
+        const data = await youtubeApiRequest({ endpoint: 'channels', query: { part: 'id,contentDetails', ...ref } });
+        cachedYoutubeChannelId = data.items?.[0]?.id;
+        youtubeUploadsPlaylistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    }
+    // Check Live
+    if (config.youtubeNotificationChannelId) {
+        const liveData = await youtubeApiRequest({ endpoint: 'search', query: { part: 'id', channelId: cachedYoutubeChannelId, eventType: 'live', type: 'video', maxResults: '1' } });
+        const videoId = liveData.items?.[0]?.id?.videoId;
+        
+        // 🔮 KÍCH HOẠT BÙA CHỐNG SPAM: Lần check đầu tiên chỉ ghi nhớ, CẤM SỦA!
+        if (!initializedYoutubeLive) {
+            announcedYoutubeLiveId = videoId;
+            if (videoId) announcedYoutubeLiveIds.add(videoId);
+            initializedYoutubeLive = true;
+        } else if (videoId && videoId !== announcedYoutubeLiveId) {
+            const channel = await client.channels.fetch(config.youtubeNotificationChannelId);
+            const url = `https://www.youtube.com/watch?v=${videoId}`;
+            const msg = pickRandomMsg(ytLiveTemplates, url);
+            if (channel?.isTextBased()) await channel.send({ content: `@everyone\n${msg}`, allowedMentions: { parse: ['everyone'] } });
+            announcedYoutubeLiveId = videoId;
+            announcedYoutubeLiveIds.add(videoId);
+        }
+    }
+    // Check Video
+    if (config.youtubeVideoNotificationChannelId) {
+        const vidData = await youtubeApiRequest({ endpoint: 'playlistItems', query: { part: 'snippet', playlistId: youtubeUploadsPlaylistId, maxResults: '1' } });
+        const videoId = vidData.items?.[0]?.snippet?.resourceId?.videoId;
+        if (!initializedYoutubeVideos) { announcedYoutubeUploadId = videoId; initializedYoutubeVideos = true; return; }
+        if (videoId && videoId !== announcedYoutubeUploadId && !announcedYoutubeLiveIds.has(videoId)) {
+            const details = await youtubeApiRequest({ endpoint: 'videos', query: { part: 'snippet,liveStreamingDetails', id: videoId } });
+            if (details.items?.[0]?.snippet?.liveBroadcastContent === 'none' && !details.items?.[0]?.liveStreamingDetails) {
+                const channel = await client.channels.fetch(config.youtubeVideoNotificationChannelId);
+                const roleMention = config.youtubeVideoNotificationRoleId ? `<@&${config.youtubeVideoNotificationRoleId}> ` : '@everyone ';
+                const safeTitle = details.items[0].snippet.title.replace(/@/g, '@\u200b');
+                const url = `https://www.youtube.com/watch?v=${videoId}`;
+                const msg = pickRandomMsg(ytVideoTemplates, url, safeTitle);
+                if (channel?.isTextBased()) await channel.send({ content: `${roleMention}${msg}`, allowedMentions: { parse: config.youtubeVideoNotificationRoleId ? [] : ['everyone'], roles: config.youtubeVideoNotificationRoleId ? [config.youtubeVideoNotificationRoleId] : [] } });
+                announcedYoutubeUploadId = videoId;
+            }
+        }
+    }
 }
-
-function tiktokUsername(value) {
-	return (value.match(/@([\w.-]+)/)?.[1] ?? value.trim().replace(/^@/, '')).replace(/\/$/, '');
-}
-
-const tiktokConnection = config.tiktokAccount ? new TikTokLiveConnection(tiktokUsername(config.tiktokAccount), {}) : null;
-let wasTikTokLive = false;
 
 async function checkTikTokLive() {
-	if (!tiktokConnection) return;
-	const isLive = await tiktokConnection.fetchIsLive();
-	if (isLive && !wasTikTokLive) {
-		await postLiveAlert('TikTok', config.tiktokNotificationChannelId, `https://www.tiktok.com/@${tiktokUsername(config.tiktokAccount)}/live`);
-	}
-	wasTikTokLive = isLive;
+    if (!tiktokConnection) return;
+    const isLive = await tiktokConnection.fetchIsLive();
+    
+    // 🔮 KÍCH HOẠT BÙA CHỐNG SPAM TIKTOK TƯƠNG TỰ
+    if (!initializedTikTokLive) {
+        wasTikTokLive = isLive;
+        initializedTikTokLive = true;
+        return;
+    }
+
+    if (isLive && !wasTikTokLive) {
+        const channel = await client.channels.fetch(config.tiktokNotificationChannelId);
+        const username = config.tiktokAccount.match(/@([\w.-]+)/)?.[1] ?? config.tiktokAccount.trim().replace(/^@/, '').replace(/\/$/, '');
+        const url = `https://www.tiktok.com/@${username}/live`;
+        const msg = pickRandomMsg(ttLiveTemplates, url);
+        if (channel?.isTextBased()) await channel.send({ content: `@everyone\n${msg}`, allowedMentions: { parse: ['everyone'] } });
+    }
+    wasTikTokLive = isLive;
 }
 
+client.once(Events.ClientReady, (readyClient) => {
+    console.log(`✅ [THÀNH CÔNG] Bot đã online: ${readyClient.user.tag}`);
+    if (config.youtubeApiKey) setInterval(checkYouTube, config.youtubePollIntervalMs);
+    if (config.tiktokAccount) setInterval(checkTikTokLive, config.tiktokPollIntervalMs);
+});
+
 client.login(config.discordToken);
+
+// ==========================================
+// 6. BÍ THUẬT "ĐÁNH SẬP ĐỂ LUÂN HỒI" (AUTO-RESTART)
+// ==========================================
+const THOI_GIAN_RESET_GIO = 5; 
+setInterval(() => {
+    console.log(`🚨 [AUTO-RESET] Đã chạy đủ ${THOI_GIAN_RESET_GIO} tiếng! Tự động sập nguồn để Render reset lại bộ nhớ!`);
+    process.exit(0); 
+}, THOI_GIAN_RESET_GIO * 60 * 60 * 1000);
