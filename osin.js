@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
 import { TikTokLiveConnection } from 'tiktok-live-connector';
@@ -258,6 +259,9 @@ async function checkTikTok() {
 }
 
 // ─── KHỞI ĐỘNG ────────────────────────────────────────────────────────────────
+// HTTP server nhỏ để Render/UptimeRobot có port mà ping
+createServer((_, res) => res.end('OK')).listen(Number(process.env.PORT) || 3000, '0.0.0.0');
+
 client.once(Events.ClientReady, (rc) => {
 	console.log(`✅ Bot online: ${rc.user.tag}`);
 	if (cfg.youtubeApiKey && cfg.youtubeChannel && (cfg.ytLiveChannelId || cfg.ytVideoChannelId))
